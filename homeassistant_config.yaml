@@ -1,0 +1,28 @@
+# Home Assistant MQTT Sensor Configuration
+# Add this to your configuration.yaml file
+
+mqtt:
+  sensor:
+    - name: "Aquapark Swimming Pool"
+      state_topic: "aquapark/swimming"
+      value_template: "{{ value_json.occupancy }}"
+      unit_of_measurement: "%"
+      icon: mdi:pool
+      
+    - name: "Aquapark Fun Zone"
+      state_topic: "aquapark/fun"
+      value_template: "{{ value_json.occupancy }}"
+      unit_of_measurement: "%"
+      icon: mdi:water-polo
+      
+    - name: "Aquapark Wellness"
+      state_topic: "aquapark/wellness"
+      value_template: "{{ value_json.occupancy }}"
+      unit_of_measurement: "%"
+      icon: mdi:spa
+      
+    - name: "Aquapark Exterior"
+      state_topic: "aquapark/exterior"
+      value_template: "{{ value_json.occupancy }}"
+      unit_of_measurement: "%"
+      icon: mdi:pool-thermometer
