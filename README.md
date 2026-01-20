@@ -21,6 +21,36 @@ You can deploy this in two ways:
 
 ## Option 1: Docker Deployment (Recommended)
 
+### Using Pre-built Image from GitHub Container Registry
+
+The easiest way to deploy is using the pre-built Docker image:
+
+```yaml
+services:
+  aquapark-monitor:
+    image: ghcr.io/rplevka/aquapark-occupancy:latest
+    container_name: aquapark-monitor
+    restart: unless-stopped
+    environment:
+      - SWIM_MQTT_BROKER=192.168.1.100
+      - SWIM_MQTT_PORT=1883
+      - SWIM_MQTT_USERNAME=your_mqtt_user
+      - SWIM_MQTT_PASSWORD=your_mqtt_password
+      - SWIM_MQTT_TOPIC_PREFIX=aquapark
+      - TZ=Europe/Prague
+    networks:
+      - homeassistant
+    volumes:
+      - ./aquapark-logs:/var/log
+```
+
+Then run:
+```bash
+docker-compose up -d
+```
+
+### Building from Source
+
 ### 1. Configure Environment Variables
 
 Copy the example environment file:
@@ -48,7 +78,9 @@ Add the aquapark-monitor service to your existing `docker-compose.yml`:
 ```yaml
 services:
   aquapark-monitor:
-    build: /path/to/CascadeProjects
+    image: ghcr.io/rplevka/aquapark-occupancy:latest
+    # Or build from source:
+    # build: /path/to/aquapark-occupancy
     container_name: aquapark-monitor
     restart: unless-stopped
     environment:
