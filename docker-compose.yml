@@ -11,6 +11,7 @@ services:
       - SWIM_MQTT_USERNAME=${SWIM_MQTT_USERNAME:-mqtt_user}
       - SWIM_MQTT_PASSWORD=${SWIM_MQTT_PASSWORD:-mqtt_password}
       - SWIM_MQTT_TOPIC_PREFIX=${SWIM_MQTT_TOPIC_PREFIX:-aquapark}
+      - SWIM_SLEEP_INTERVAL=${SWIM_SLEEP_INTERVAL:-300}
       - TZ=Europe/Prague
     networks:
       - homeassistant

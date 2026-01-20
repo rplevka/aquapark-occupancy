@@ -5,17 +5,19 @@ This script monitors the current occupancy of pools at www.aquavparku.cz and pub
 ## Features
 
 - Parses occupancy data for 4 zones: Swimming Pool, Fun Zone, Wellness, and Exterior
-- Only runs during operating hours (9:00-20:30 Prague time)
+- Runs continuously with configurable polling interval (default: 5 minutes)
+- Only publishes during operating hours (9:00-20:30 Prague time)
 - Publishes data to MQTT for Home Assistant integration
 - Timezone-aware scheduling using Prague (Europe/Prague) timezone
 - Environment variable configuration with `SWIM_` prefix
+- Optional single-shot mode via `--single` flag
 - Docker support for easy deployment
 
 ## Deployment Options
 
 You can deploy this in two ways:
-1. **Docker (Recommended)** - Run alongside Home Assistant in Docker
-2. **Manual Installation** - Run directly on your system with cron
+1. **Docker (Recommended)** - Run continuously alongside Home Assistant in Docker
+2. **Manual Installation** - Run directly on your system (continuous or single-shot mode)
 
 ---
 
@@ -37,6 +39,7 @@ services:
       - SWIM_MQTT_USERNAME=your_mqtt_user
       - SWIM_MQTT_PASSWORD=your_mqtt_password
       - SWIM_MQTT_TOPIC_PREFIX=aquapark
+      - SWIM_SLEEP_INTERVAL=300  # Check every 5 minutes
       - TZ=Europe/Prague
     networks:
       - homeassistant
@@ -67,6 +70,7 @@ SWIM_MQTT_PORT=1883
 SWIM_MQTT_USERNAME=your_mqtt_user
 SWIM_MQTT_PASSWORD=your_mqtt_password
 SWIM_MQTT_TOPIC_PREFIX=aquapark
+SWIM_SLEEP_INTERVAL=300  # Check every 5 minutes (300 seconds)
 ```
 
 ### 2. Deploy with Docker Compose
@@ -89,6 +93,7 @@ services:
       - SWIM_MQTT_USERNAME=${SWIM_MQTT_USERNAME}
       - SWIM_MQTT_PASSWORD=${SWIM_MQTT_PASSWORD}
       - SWIM_MQTT_TOPIC_PREFIX=${SWIM_MQTT_TOPIC_PREFIX}
+      - SWIM_SLEEP_INTERVAL=${SWIM_SLEEP_INTERVAL:-300}
       - TZ=Europe/Prague
     networks:
       - homeassistant
@@ -139,6 +144,7 @@ export SWIM_MQTT_PORT="1883"
 export SWIM_MQTT_USERNAME="your_mqtt_user"
 export SWIM_MQTT_PASSWORD="your_mqtt_password"
 export SWIM_MQTT_TOPIC_PREFIX="aquapark"
+export SWIM_SLEEP_INTERVAL="300"  # Check every 5 minutes
 ```
 
 Or the script will use these defaults:
@@ -147,10 +153,25 @@ Or the script will use these defaults:
 - `SWIM_MQTT_USERNAME` → `mqtt_user`
 - `SWIM_MQTT_PASSWORD` → `mqtt_password`
 - `SWIM_MQTT_TOPIC_PREFIX` → `aquapark`
+- `SWIM_SLEEP_INTERVAL` → `300` (5 minutes)
 
-### 3. Set Up Cron Job
+### 3. Run the Script
 
-The script handles the 9:00-20:30 time window internally, so you can run it every 5 minutes:
+**Option A: Continuous Mode (Recommended)**
+
+Run the script continuously in the background:
+
+```bash
+cd /Users/roman.plevka/CascadeProjects
+source aquavparku/bin/activate
+nohup python aquapark_occupancy.py >> /tmp/aquapark.log 2>&1 &
+```
+
+The script will check occupancy every 5 minutes (configurable via `SWIM_SLEEP_INTERVAL`).
+
+**Option B: Single-Shot Mode with Cron**
+
+If you prefer cron scheduling, use the `--single` flag:
 
 ```bash
 crontab -e
@@ -162,10 +183,10 @@ Add this line:
 SWIM_MQTT_BROKER=192.168.1.100
 SWIM_MQTT_USERNAME=your_mqtt_user
 SWIM_MQTT_PASSWORD=your_mqtt_password
-*/5 * * * * cd /Users/roman.plevka/CascadeProjects && source aquavparku/bin/activate && python aquapark_occupancy.py >> /tmp/aquapark.log 2>&1
+*/5 * * * * cd /Users/roman.plevka/CascadeProjects && source aquavparku/bin/activate && python aquapark_occupancy.py --single >> /tmp/aquapark.log 2>&1
 ```
 
-**Note:** The script will exit immediately if run outside operating hours (9:00-20:30 Prague time).
+**Note:** The script only publishes data during operating hours (9:00-20:30 Prague time).
 
 ### 4. Configure Home Assistant
 
@@ -183,11 +204,17 @@ After adding the configuration:
 
 ## Testing
 
-Test the script manually:
+Test the script manually in single-shot mode:
 
 ```bash
 cd /Users/roman.plevka/CascadeProjects
 source aquavparku/bin/activate
+python aquapark_occupancy.py --single
+```
+
+Or run in continuous mode (press Ctrl+C to stop):
+
+```bash
 python aquapark_occupancy.py
 ```
 
@@ -237,20 +264,24 @@ All configuration is done via environment variables with the `SWIM_` prefix:
 | `SWIM_MQTT_USERNAME` | `mqtt_user` | MQTT username |
 | `SWIM_MQTT_PASSWORD` | `mqtt_password` | MQTT password |
 | `SWIM_MQTT_TOPIC_PREFIX` | `aquapark` | MQTT topic prefix |
+| `SWIM_SLEEP_INTERVAL` | `300` | Seconds between checks (continuous mode) |
 
 ## Troubleshooting
 
 ### Docker
 - **Container not starting**: Check logs with `docker logs aquapark-monitor`
-- **No data in MQTT**: Verify network connectivity between containers
-- **Check if script is running**: `docker exec aquapark-monitor cat /var/log/aquapark.log`
+- **No data in MQTT**: Verify network connectivity between containers and check if within operating hours
+- **Check if script is running**: `docker logs -f aquapark-monitor` to see real-time output
+- **Adjust polling interval**: Set `SWIM_SLEEP_INTERVAL` environment variable (in seconds)
 
 ### Manual Installation
 - **SSL Certificate Warnings**: These are suppressed in the script but are harmless
 - **MQTT Connection Issues**: Check your broker IP, port, and credentials
 - **No Data in Home Assistant**: Verify MQTT integration is configured and the broker is running
-- **Script Not Running**: Check cron logs at `/tmp/aquapark.log`
+- **Script Not Running**: Check process with `ps aux | grep aquapark` or logs at `/tmp/aquapark.log`
+- **Stop continuous mode**: Find process with `ps aux | grep aquapark` and kill it
 
 ### General
-- **Script runs outside hours**: The script will exit immediately if run outside 9:00-20:30 Prague time
+- **No data outside hours**: The script only publishes during 9:00-20:30 Prague time (it continues running but skips publishing)
 - **Timezone issues**: Ensure `TZ=Europe/Prague` is set (Docker) or system timezone is correct (manual)
+- **Change polling frequency**: Adjust `SWIM_SLEEP_INTERVAL` (e.g., `600` for 10 minutes, `180` for 3 minutes)

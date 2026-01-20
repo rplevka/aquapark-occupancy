@@ -15,6 +15,8 @@ from datetime import datetime, time
 import pytz
 import paho.mqtt.client as mqtt
 import urllib3
+import argparse
+import time as time_module
 
 # Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -25,6 +27,7 @@ MQTT_PORT = int(os.getenv("SWIM_MQTT_PORT", "1883"))
 MQTT_USERNAME = os.getenv("SWIM_MQTT_USERNAME", "mqtt_user")
 MQTT_PASSWORD = os.getenv("SWIM_MQTT_PASSWORD", "mqtt_password")
 MQTT_TOPIC_PREFIX = os.getenv("SWIM_MQTT_TOPIC_PREFIX", "aquapark")
+SLEEP_INTERVAL = int(os.getenv("SWIM_SLEEP_INTERVAL", "600"))
 
 def is_within_operating_hours():
     """Check if current time is between 9:00 and 20:30 Prague time"""
@@ -100,8 +103,8 @@ def publish_to_mqtt(data):
         print(json.dumps({"error": f"MQTT publish failed: {str(e)}"}), file=sys.stderr)
         return False
 
-def main():
-    """Main function to run the occupancy parser"""
+def run_once():
+    """Run a single iteration of the occupancy check"""
     
     # Check if within operating hours
     if not is_within_operating_hours():
@@ -112,7 +115,7 @@ def main():
             "message": "Pool is closed (operating hours: 9:00-20:30 Prague time)",
             "current_time": now.strftime("%H:%M")
         }))
-        sys.exit(0)
+        return False
     
     # Fetch data
     data = fetch_occupancy_data()
@@ -123,6 +126,28 @@ def main():
     
     # Also print JSON for debugging
     print(json.dumps(data, indent=2))
+    return True
+
+def main():
+    """Main function to run the occupancy parser"""
+    parser = argparse.ArgumentParser(description='Aquapark occupancy monitor')
+    parser.add_argument('--single', action='store_true', 
+                       help='Run once and exit (default: run continuously)')
+    args = parser.parse_args()
+    
+    if args.single:
+        # Single-shot mode
+        run_once()
+    else:
+        # Continuous mode
+        print(f"Starting continuous monitoring (interval: {SLEEP_INTERVAL}s)")
+        while True:
+            try:
+                run_once()
+            except Exception as e:
+                print(json.dumps({"error": f"Unexpected error: {str(e)}"}), file=sys.stderr)
+            
+            time_module.sleep(SLEEP_INTERVAL)
 
 if __name__ == "__main__":
     main()
