@@ -40,6 +40,49 @@ def is_within_operating_hours():
     
     return start_time <= current_time <= end_time
 
+# Zone labels as they appear on the page. Matching by label keeps working when
+# the site changes the order of the zone numbers (e.g. "zóna 2+1") or the markup.
+ZONE_LABELS = {
+    "swimming": r"Plaveck[ýy] baz[ée]n",
+    "fun": r"Relaxa[čc]n[íi] a z[áa]bavn[íi] z[óo]na",
+    "wellness": r"Wellness",
+    "exterior": r"Letn[íi] are[áa]l",
+}
+
+
+def parse_occupancy(page_text):
+    """Extract occupancy percentages from the page text.
+
+    Handles both the current layout ("Plavecký bazén:(zóna 1)aktuálně: 28 %")
+    and the older one ("Zóna 1: Plavecký bazén aktuálně: 28 %").
+    Falls back to the header widget ("Plavecký bazén: 28 %") if the main
+    section can't be parsed.
+    """
+    # Collapse whitespace and convert non-breaking spaces so the patterns below
+    # don't have to care about the exact formatting of the page.
+    text = re.sub(r"\s+", " ", page_text.replace("\xa0", " "))
+
+    occupancy_data = {}
+    for zone_name, label in ZONE_LABELS.items():
+        # Main section: label, optional "(zóna N)" note, then "aktuálně: X %".
+        # [^%] prevents matching across another occupancy value.
+        match = re.search(
+            label + r"[^%]{0,80}?aktu[áa]ln[ěe]:\s*(\d+)\s*%",
+            text,
+            re.IGNORECASE,
+        )
+        if not match:
+            # Fallback: header widget, where the label is directly followed by a value.
+            match = re.search(
+                label + r"[^%\d]{0,40}?(\d+)\s*%",
+                text,
+                re.IGNORECASE,
+            )
+        occupancy_data[zone_name] = int(match.group(1)) if match else None
+
+    return occupancy_data
+
+
 def fetch_occupancy_data():
     """Fetch and parse occupancy data from aquavparku.cz"""
     url = "https://www.aquavparku.cz/oteviraci-doba-arealu-a-aktualni-obsazenost"
@@ -54,25 +97,14 @@ def fetch_occupancy_data():
         
         soup = BeautifulSoup(response.content, 'html.parser')
         
-        zone_patterns = [
-            ("swimming", r"Zóna 1:\s*Plavecký bazénaktuálně:\s*(\d+)\s*%"),
-            ("fun", r"Zóna 2:\s*Relaxační a zábavní zónaaktuálně:\s*(\d+)\s*%"),
-            ("wellness", r"Zóna 3:\s*Wellnessaktuálně:\s*(\d+)\s*%"),
-            ("exterior", r"Zóna 4:\s*Letní areálaktuálně:\s*(\d+)\s*%")
-        ]
+        occupancy_data = parse_occupancy(soup.get_text())
         
-        page_text = soup.get_text()
-        
-        occupancy_data = {}
-        for zone_name, pattern in zone_patterns:
-            match = re.search(pattern, page_text)
-            if match:
-                occupancy_data[zone_name] = int(match.group(1))
-            else:
-                occupancy_data[zone_name] = None
+        # All zones missing almost certainly means the page layout changed again.
+        if all(value is None for value in occupancy_data.values()):
+            return {"error": "Could not parse occupancy values from page"}
         
         return occupancy_data
-        
+
     except Exception as e:
         return {"error": str(e)}
 
